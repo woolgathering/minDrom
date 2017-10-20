@@ -28,14 +28,11 @@ SynthDef(\fft, {|inBus, buffs = #[0,0], copy = #[0,0]|
   // buffsCopy = ;
   PV_Copy(buffs, copy);
   PV_BinScramble(copy, MouseX.kr , 0.1, MouseY.kr > 0.5 );
-  // PV_MagAbove(copy, 10);
+  PV_MagAbove(copy, 10);
 
-  // PV_Invert(buffs);
-  // PV_MagBelow(buffs, 3);
-  PV_MagShift(buffs, 1, MouseX.kr(-128, 128));
+  PV_Invert(copy);
+  PV_MagBelow(buffs, 3);
   // PV_CommonMul(buffs, copy, MouseX.kr(0, 50), 0);
-  // PV_MagMul(buffs, copy);
-
   PV_MagMinus(buffs, copy);
   // PV_MagAbove(buffs, 9);
   // PV_RandComb(buffs, MouseY.kr);

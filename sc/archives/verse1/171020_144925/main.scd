@@ -26,7 +26,7 @@ CmdPeriod.doOnce({
   if(sound.record) {s.stopRecording}; // stop recording (unnecessary??)
 });
 
-sound.record = false; // boolean whether or not to record <---------------------------------------------------------------RECORD??
+sound.record = true; // boolean whether or not to record <---------------------------------------------------------------RECORD??
 sound.rate = 1; // the rate at which we read the file
 
 Routine.run({
@@ -54,7 +54,7 @@ Routine.run({
 
 
   // Synth(\player, [outBus: sound.outBus, buff: sound.buffer], target: sound.groups.orig);
-  Synth(\stretcher, [outBus: sound.origBus, buff: sound.buffer, rate: sound.rate, trans: 0.01, winSize: 0.1, timeDisp: 0.1],
+  Synth(\stretcher, [outBus: sound.origBus, buff: sound.buffer, rate: sound.rate, trans: 0.1, winSize: 0.1, timeDisp: 0.1],
     target: sound.groups.orig
   );
   Synth(\fft, [inBus: sound.origBus, buffs: sound.fftBuffs, copy: sound.fftCopies], target: sound.groups.process);
