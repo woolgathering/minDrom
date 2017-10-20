@@ -1,0 +1,89 @@
+(
+var parent = (), sound = ();
+
+parent.thisDir = "~/Documents/jacob/pieces/minDrom".standardizePath; // this dir's path
+parent.freeables = List.new(0);
+parent.thisFile = parent.thisDir++"/sc/workbench/main.scd"; // get the path of this file
+
+sound.path = parent.thisDir++"/sound/stems/verse1.wav"; // path to the sound
+// sound.writeLoc = "%/sound/rec/%_%.wav".format(parent.thisDir, sound.path.basename.splitext[0], Date.getDate.stamp); // location to write
+sound.synths = parent.thisDir++"/sc/synths.scd"; // path to the synths
+sound.origBus = Bus.audio(s,2); // a stereo bus for the orig
+sound.outBus = Bus.audio(s,2); // a bus that gets output
+sound.fftBuffs = [Buffer.alloc(s, 1024), Buffer.alloc(s, 1024)]; // alloc two buffs for stereo fft (allocate this in the main Routine?)
+sound.recPath = parent.thisDir++"/sound/rec/%_%.wav".format(sound.path.basename.splitext[0], Date.getDate.stamp); // the recording path (get the name of the file we're using)
+
+parent.freeables.addAll(sound.origBus, sound.outBus, sound.fftBuffs); // add these things to the freeables
+parent.compileStringPath = parent.thisDir++"/sc/archives/%/%_%.scd".format(sound.path.basename.splitext[0], sound.path.basename.splitext[0], Date.getDate.stamp);
+
+sound.groups = ();
+sound.groups.orig = ParGroup.new;
+sound.groups.process = ParGroup.after(sound.groups.orig);
+sound.groups.out = ParGroup.after(sound.groups.process);
+parent.freeables.addAll(sound.groups);
+
+sound.record = true; // boolean whether or not to record <---------------------------------------------------------------RECORD??
+
+File.include(sound.synths); // load the synths
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+sound.rate = 10; // the rate at which we read the file
+
+
+
+
+CmdPeriod.doOnce({
+  parent.freeables.do(_.free); // free the freeables on CmdPeriod
+  if(sound.record) {s.stopRecording}; // stop recording (unnecessary??)
+});
+
+
+Routine.run({
+  // sound.buffer = Buffer.read(s, sound.path, action: {|thisBuff| parent.freeables.add(thisBuff)}); // read it as stereo and add it to freeables
+  sound.buffer = Array.fill(2, {|i|
+    var buff;
+    buff = Buffer.readChannel(s, sound.path, channels: [i], action: {|thisBuff| parent.freeables.add(thisBuff)});
+    s.sync;
+    buff; // return
+  });
+  s.sync;
+  if(sound.record) {
+    // s.recHeaderFormat("wav"); // record as a WAV
+    s.record(sound.recPath);
+    File.copy(parent.thisFile, parent.compileStringPath); // copy this file over for posterity
+  };
+  // sound.recBuff = Buffer.alloc(s,
+  //   numFrames: (sound.buffer[0].numFrames*sound.rate.reciprocal).trunc,
+  //   numChannels: 2,
+  //   completionMessage: {|thisBuff| parent.freeables.add(thisBuff)} // add this buffer to freeables
+  // ); // allocate a buffer for writing
+  s.sync;
+
+
+  // Synth(\player, [outBus: sound.outBus, buff: sound.buffer], target: sound.groups.orig);
+  Synth(\stretcher, [outBus: sound.origBus, buff: sound.buffer, rate: sound.rate * 0.5, trans: 1, winSize: 0.1, timeDisp: 0.1],
+    target: sound.groups.orig
+  );
+
+  Synth(\fft, [inBus: sound.origBus, buffs: sound.fftBuffs], target: sound.groups.process);
+  Synth(\ifft, [outBus: sound.outBus, buffs: sound.fftBuffs], target: sound.groups.process, addAction: \addToTail);
+
+  Synth(\mainOut, [inBus: sound.outBus, amp: -3.dbamp], target: sound.groups.out);
+
+
+});
+
+// copy this file over so we can keep track of stuff
+// File.copy(parent.thisFile, parent.compileStringPath);
+// "cp % %".format(parent.thisFile, parent.compileStringPath).unixCmd;
+)
+
+s.meter
+s.plotTree;
+s.makeGui
+"Imaginary/Directory/fish.rtf".basename.splitext[0];
+d = Date.getDate.stamp
+
+d.stamp
+Server.scsynth

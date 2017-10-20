@@ -1,0 +1,27 @@
+Total samples in the file: 8877055 (44100 * totalDur)
+
+Total frames: 5031 @ 25fps
+
+
+
+
+//////
+Samples per frame:
+
+totalSamples/totalFrames
+
+8877055/5031 = 1764.4712780759 samples per frame
+
+--->> how to deal with fractions of samples?? Rounding, I'm sure...
+
+Taken to the next power of two; 2048 with zero padding. Each shoud be loaded into a buffer and operated on individually. 
+Code is something like this:
+
+spf = samples per frame (1764.47...)
+
+samples = (spf*frameNum).round(1)
+
+then copy those frames to a buffer that is:
+
+buffer = Signal.new(samples.nextPowOfTwo) // syntax is wrong but you get the idea
+// then copy the values in samples to buffer. Zero padding is automatic. Boom!

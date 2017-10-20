@@ -1,0 +1,139 @@
+(
+var parent = (), sound = ();
+
+parent.thisDir = "~/Documents/jacob/pieces/minDrom".standardizePath; // this dir's path
+parent.freeables = List.new(0);
+parent.thisFile = parent.thisDir++"/sc/workbench/main.scd"; // get the path of this file
+sound.path = parent.thisDir++"/sound/stems/verse1.wav"; // path to the sound
+sound.synths = parent.thisDir++"/sc/synths.scd"; // path to the synths
+sound.origBus = Bus.audio(s,2); // a stereo bus for the orig
+sound.outBus = Bus.audio(s,2); // a bus that gets output
+sound.fftBuffs = [Buffer.alloc(s, 1024), Buffer.alloc(s, 1024)]; // alloc two buffs for stereo fft (allocate this in the main Routine?)
+sound.recPath = parent.thisDir++"/sound/rec/%_%.wav".format(sound.path.basename.splitext[0], Date.getDate.stamp); // the recording path (get the name of the file we're using)
+parent.freeables.addAll(sound.origBus, sound.outBus, sound.fftBuffs); // add these things to the freeables
+parent.compileStringPath = parent.thisDir++"/sc/archives/%/%_%".format(sound.path.basename.splitext[0], sound.path.basename.splitext[0], Date.getDate.stamp);
+
+sound.groups = ();
+sound.groups.orig = ParGroup.new;
+sound.groups.process = ParGroup.after(sound.groups.orig);
+sound.groups.out = ParGroup.after(sound.groups.process);
+parent.freeables.addAll(sound.groups);
+File.include(sound.synths); // load the synths
+
+CmdPeriod.doOnce({
+  parent.freeables.do(_.free); // free the freeables on CmdPeriod
+  if(sound.record) {s.stopRecording}; // stop recording (unnecessary??)
+});
+
+sound.record = true; // boolean whether or not to record <---------------------------------------------------------------RECORD??
+sound.rate = 0.1; // the rate at which we read the file
+
+Routine.run({
+  // sound.buffer = Buffer.read(s, sound.path, action: {|thisBuff| parent.freeables.add(thisBuff)}); // read it as stereo and add it to freeables
+  sound.buffer = Array.fill(2, {|i|
+    var buff;
+    buff = Buffer.readChannel(s, sound.path, channels: [i], action: {|thisBuff| parent.freeables.add(thisBuff)});
+    s.sync;
+    buff; // return
+  });
+  s.sync;
+  if(sound.record) {
+    // s.recHeaderFormat("wav"); // record as a WAV
+    s.record(sound.recPath);
+    File.copy(parent.thisFile, parent.compileStringPath); // copy this file over for posterity
+    "echo \"\n\n\n\n//// SYNTHS /////////////////////////\n\n\" >> %".format(parent.compileStringPath).unixCmd;
+    "cat % >> %".format(sound.synths, parent.compileStringPath).unixCmd; // don't forget about the synths!
+  };
+  // sound.recBuff = Buffer.alloc(s,
+  //   numFrames: (sound.buffer[0].numFrames*sound.rate.reciprocal).trunc,
+  //   numChannels: 2,
+  //   completionMessage: {|thisBuff| parent.freeables.add(thisBuff)} // add this buffer to freeables
+  // ); // allocate a buffer for writing
+  s.sync;
+
+
+  // Synth(\player, [outBus: sound.outBus, buff: sound.buffer], target: sound.groups.orig);
+  Synth(\stretcher, [outBus: sound.origBus, buff: sound.buffer, rate: sound.rate, trans: 0.1, winSize: 0.1, timeDisp: 0.1],
+    target: sound.groups.orig
+  );
+
+  Synth(\fft, [inBus: sound.origBus, buffs: sound.fftBuffs], target: sound.groups.process);
+  Synth(\ifft, [outBus: sound.outBus, buffs: sound.fftBuffs], target: sound.groups.process, addAction: \addToTail);
+
+  Synth(\mainOut, [inBus: sound.outBus, amp: -3.dbamp], target: sound.groups.out);
+
+
+});
+
+)
+
+
+
+
+//// SYNTHS /////////////////////////
+
+
+SynthDef(\player, {|outBus, buff, amp = 1|
+  var sig;
+  sig = PlayBuf.ar(2, buff, rate: BufRateScale.kr(buff), doneAction: 2); // play it back
+  Out.ar(outBus, sig*amp); // output it
+}).send(s);
+
+SynthDef(\stretcher, {|outBus, buff = #[0,0], rate = 1, trans = 1, winSize = 0.2, timeDisp = 0.2, amp = 0.2|
+  var sig;
+  sig = TimeStretchStereo.ar(buff[0], buff[1], rate, trans, winSize, timeDisp); // play it back
+  sig = HPF.ar(sig, 500);
+  Out.ar(outBus, sig*amp); // output it
+}).send(s);
+
+SynthDef(\mainOut, {|inBus, amp = 0.5|
+  var sig;
+  sig = In.ar(inBus, 2);
+  // sig = Greyhole.ar(sig,
+  //   delayTime: 2, damp: 0, size: 1, diff: 0.707, feedback: 0.9, modDepth: 0.1, modFreq: 2);
+  // // compressor???
+  Out.ar(0, sig*amp);
+}).send(s);
+
+SynthDef(\fft, {|inBus, buffs = #[0,0]|
+  var sig, buffCopy, buff1, buff2, buffsCopy;
+  sig = In.ar(inBus, 2);
+  FFT(buffs, sig); // works?
+
+  // buffsCopy = ;
+  // buffCopy = PV_Copy(buffs, [LocalBuf(1024), LocalBuf(1024)]);
+  // buff1 = PV_Copy(buffs[0], LocalBuf(1024));
+  // buff2 = PV_Copy(buffs[1], LocalBuf(1024));
+  // buffsCopy = [buff1, buff2];
+  // PV_MagAbove(buffsCopy, 10);
+
+  PV_Invert(buffs);
+  // PV_MagBelow(buffs, 5);
+  PV_MagAbove(buffs, 9);
+  PV_RandComb(buffs, MouseY.kr);
+  PV_BinScramble(buffs, MouseX.kr , 0.1, MouseY.kr > 0.5 );
+  // PV_MagBelow(buffs, 5);
+  // PV_PartialSynthP(buffs, MouseY.kr(0,pi * 2), numFrames: 100);
+
+
+
+  // PV_MagMinus(buffs, buffsCopy);
+
+  PV_MagSmooth(buffs, 0.95);
+}).send(s);
+
+SynthDef(\ifft, {|outBus, buffs = #[0,0]|
+  var sig;
+  sig = IFFT(buffs);
+  Out.ar(outBus, sig);
+}).send(s);
+
+
+
+
+
+SynthDef(\writeSynth, {|inBus = 0, writeBuff, level = 1|
+  var sig;
+  sig = In.ar(inBus, 4) * level;
+  RecordBuf.ar(sig, writeBuff);
+}).send(s);
